@@ -5,9 +5,11 @@ import smtplib
 
 from outreach.columns import VALID_MARK
 from outreach.config import RampPhase, load_settings
-from outreach.mailer import build_message, rfc_message_id
+from outreach.mailer import rfc_message_id
 from outreach.plan import plan_sends
+from outreach.qa import QA_PASS
 from outreach.state import SendRecord, SendState
+from outreach.templates import render_sequence
 from outreach.worker import apply_send, run_sends
 
 from tests.test_sheet_grid import lead
@@ -22,6 +24,14 @@ TODAY = date(2026, 11, 23)
 
 
 def _queued(lead_id, email, row, sender=""):
+    sequence = render_sequence(
+        company="Acme Pvt. Ltd.",
+        first_name="Asha",
+        trigger="two units in Wagle Estate making custom parts",
+        handoff="jobs moving from the shop floor to dispatch",
+        topic="fabrication jobs",
+        lead_id=lead_id,
+    )
     return lead(
         row=row,
         lead_id=lead_id,
@@ -31,15 +41,18 @@ def _queued(lead_id, email, row, sender=""):
         company="Acme Pvt. Ltd.",
         first_name="Asha",
         email=email,
-        trigger="two units in Wagle Estate",
-        handoff="jobs moving to dispatch",
+        trigger="two units in Wagle Estate making custom parts",
+        handoff="jobs moving from the shop floor to dispatch",
         topic="fabrication jobs",
-        subject="Question about Acme Pvt. Ltd.'s fabrication jobs",
-        day0="Hi Asha,\n\nBody.\n\nBest,\nPrathamesh Patil\npratz.is-a.dev",
-        day4="day 4",
-        day8="day 8",
-        day14="day 14",
-        notes=f"Researched Nov 20; {VALID_MARK} (named inbox, mx=aspmx.l.google.com)",
+        subject=sequence.subject,
+        day0=sequence.day0,
+        day4=sequence.day4,
+        day8=sequence.day8,
+        day14=sequence.day14,
+        notes=(
+            f"Researched Nov 20; {VALID_MARK} (named inbox, mx=aspmx.l.google.com); "
+            f"{QA_PASS} ({sequence.variant_key})"
+        ),
     )
 
 

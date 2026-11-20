@@ -40,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("prompt", help="Print the 5-lead Grok discovery prompt")
     sub.add_parser("verify", help="MX-check queued emails and record the result in Notes")
     sub.add_parser("assemble", help="Fill subject and the four emails from research fields")
+    sub.add_parser("check", help="QA research fields and assembled copy; mark bad rows Needs Review")
     sub.add_parser("sync-db", help="Upsert the current Outreach Tracker rows into Postgres (DATABASE_URL)")
 
     send = sub.add_parser("send", help="Send due touches. Dry-run unless --confirm is set")
@@ -74,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
         return _verify(data, repo, settings)
     if args.command == "assemble":
         return _assemble(data, repo, settings)
+    if args.command == "check":
+        return _check(data, repo, settings)
     if args.command == "sync-db":
         return _sync_db(data, settings)
     if args.command == "send":
@@ -86,6 +89,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         if _assemble(data, repo, settings) != 0:
             return 2
+        # Re-check already-assembled rows so bad copy never enters the send plan.
+        _check(data, repo, settings)
         return _send(data, repo, settings, args)
     return 2
 
@@ -133,15 +138,45 @@ def _assemble(data: SheetData, repo, settings=None) -> int:
             repo.save(lead)
     print(f"Assembled {len(summary.assembled)}: {', '.join(summary.assembled) or '-'}")
     print(f"Already had copy: {len(summary.already)}")
+    if summary.rejected:
+        print("Rejected by copy QA (Needs Review):")
+        for lead_id, reason in summary.rejected:
+            print(f"  {lead_id}: {reason}")
     if summary.waiting:
         print("Waiting on the Grok bot:")
         for lead_id, reason in summary.waiting:
             print(f"  {lead_id}: {reason}")
-    elif not summary.assembled:
+    elif not summary.assembled and not summary.rejected:
         print("No blank rows are ready to assemble.")
     if settings is not None:
         _maybe_sync(settings, data.leads)
     return 0
+
+
+def _check(data: SheetData, repo, settings) -> int:
+    if not _guard(data, ASSEMBLE_COLUMNS):
+        return 0
+    from outreach.qa import apply_qa_result, check_lead_copy
+
+    passed = []
+    failed = []
+    for lead in data.leads:
+        if not lead.lead_id or not lead.text("day0"):
+            continue
+        result = check_lead_copy(lead)
+        apply_qa_result(lead, result)
+        if lead.dirty:
+            repo.save(lead)
+        if result.ok:
+            passed.append(lead.lead_id)
+        else:
+            failed.append((lead.lead_id, result.summary))
+    print(f"Copy QA passed: {len(passed)}")
+    print(f"Copy QA failed: {len(failed)}")
+    for lead_id, reason in failed:
+        print(f"  {lead_id}: {reason}")
+    _maybe_sync(settings, data.leads)
+    return 0 if not failed else 1
 
 
 def _sync_db(data: SheetData, settings) -> int:

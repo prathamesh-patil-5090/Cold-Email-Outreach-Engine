@@ -2,24 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from outreach.columns import COLUMNS
 from outreach.models import Lead
-from outreach.templates import looks_like_mail_merge_risk, render_sequence
+from outreach.qa import QA_FAIL, apply_qa_result, check_research, check_sequence
+from outreach.templates import render_sequence
 
 RESEARCH_FIELDS = ("trigger", "handoff", "topic", "company", "first_name")
 
 
 @dataclass
 class AssembleSummary:
-    assembled: list[str]
-    already: list[str]
-    waiting: list[tuple[str, str]]
+    assembled: list[str] = field(default_factory=list)
+    already: list[str] = field(default_factory=list)
+    waiting: list[tuple[str, str]] = field(default_factory=list)
+    rejected: list[tuple[str, str]] = field(default_factory=list)
 
 
 def assemble_leads(leads: list[Lead]) -> AssembleSummary:
-    summary = AssembleSummary(assembled=[], already=[], waiting=[])
+    summary = AssembleSummary()
     for lead in leads:
         if not lead.lead_id:
             continue
@@ -33,25 +35,65 @@ def assemble_leads(leads: list[Lead]) -> AssembleSummary:
         if missing:
             summary.waiting.append((lead.lead_id, "waiting on " + ", ".join(missing)))
             continue
-        sequence = render_sequence(
+
+        _normalize_research_fields(lead)
+        research = check_research(
             company=lead.text("company"),
             first_name=lead.text("first_name"),
             trigger=lead.text("trigger"),
             handoff=lead.text("handoff"),
             topic=lead.text("topic"),
         )
-        risky = looks_like_mail_merge_risk(sequence.day0) or looks_like_mail_merge_risk(sequence.day8)
-        if risky:
-            summary.waiting.append((lead.lead_id, risky))
+        if not research.ok:
+            apply_qa_result(lead, research)
+            summary.rejected.append((lead.lead_id, research.summary))
             continue
+
+        sequence = render_sequence(
+            company=lead.text("company"),
+            first_name=lead.text("first_name"),
+            trigger=lead.text("trigger"),
+            handoff=lead.text("handoff"),
+            topic=lead.text("topic"),
+            lead_id=lead.lead_id,
+        )
+        copy = check_sequence(
+            sequence,
+            company=lead.text("company"),
+            first_name=lead.text("first_name"),
+            topic=lead.text("topic"),
+        )
+        if not copy.ok:
+            apply_qa_result(lead, copy, variant_key=sequence.variant_key)
+            summary.rejected.append((lead.lead_id, copy.summary))
+            continue
+
         lead.set_field("subject", sequence.subject)
         lead.set_field("day0", sequence.day0)
         lead.set_field("day4", sequence.day4)
         lead.set_field("day8", sequence.day8)
         lead.set_field("day14", sequence.day14)
+        apply_qa_result(lead, copy, variant_key=sequence.variant_key)
         summary.assembled.append(lead.lead_id)
     return summary
 
 
 def lead_label(key: str) -> str:
     return COLUMNS[key]
+
+
+def _normalize_research_fields(lead: Lead) -> None:
+    """Fix small Grok slips before QA. Buzzwords and empty fields still fail."""
+    for key in ("trigger", "handoff", "topic"):
+        raw = lead.text(key)
+        if not raw:
+            continue
+        cleaned = " ".join(raw.split()).strip()
+        if cleaned.endswith("."):
+            cleaned = cleaned[:-1].rstrip()
+        if key == "topic":
+            cleaned = cleaned.lower()
+        elif cleaned and cleaned[0].isalpha() and cleaned[0].isupper():
+            cleaned = cleaned[0].lower() + cleaned[1:]
+        if cleaned != lead.text(key):
+            lead.set_field(key, cleaned)

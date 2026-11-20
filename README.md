@@ -90,13 +90,16 @@ The reply inbox does not need an app password.
 outreach prompt          # discovery prompt for the Grok bot, with today's date filled in
 outreach status          # headers, lead count, and anything still missing
 outreach verify          # MX-check queued rows
-outreach assemble        # fill L–P where I, J, and K are present and the emails are blank
+outreach assemble        # fill L–P with a rotating template variant + copy QA
+outreach check           # re-QA assembled copy; mark bad rows Needs Review
 outreach sync-db         # upsert sheet rows into Postgres
 outreach send            # dry-run of today's queue
 outreach send --confirm  # send during the window, then wait out the per-mailbox jitter
-outreach run             # verify, assemble, and print the send plan
-outreach run --confirm   # verify, assemble, and send
+outreach run             # verify, assemble, check, then print the send plan
+outreach run --confirm   # verify, assemble, check, and send
 ```
+
+`assemble` picks stable subject / Day 0 / Day 4 / Day 8 / Day 14 variants from the Lead ID (so the same row does not reshuffle). Copy QA rejects buzzwords, broken topic phrases, missing company/name joins, links/HTML, and overlong Day 0 bodies. Failures stay off the send queue as `Needs Review`.
 
 `--once` sends a single email. `--max-sends N` caps a run. `--ignore-window` is only for a deliberate send outside business hours.
 

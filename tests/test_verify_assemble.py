@@ -97,8 +97,28 @@ def test_assemble_waits_until_research_fields_exist_and_does_not_overwrite():
     assert waiting.text("subject") == ""
     assert done.text("day0") == "already sent"
     assert ready.lead_id in summary.assembled
-    assert ready.text("subject") == "Question about Acme Pvt. Ltd.'s fabrication jobs"
-    assert "two units in Wagle Estate and was curious" in ready.text("day0")
+    assert "Acme Pvt. Ltd." in ready.text("subject")
+    assert "fabrication jobs" in ready.text("subject") or "fabrication jobs" in ready.text("day0")
+    assert "two units in Wagle Estate" in ready.text("day0") or "two units in Wagle Estate" in ready.text("day8")
+    assert "Copy QA: PASS" in ready.text("notes")
+
+
+def test_assemble_rejects_buzzword_research():
+    row = lead(
+        lead_id="LEAD-061",
+        research_status="Done",
+        outreach_status="Queued",
+        company="Acme",
+        first_name="Asha",
+        trigger="cutting-edge digital transformation for dealers",
+        handoff="orders moving to dispatch",
+        topic="dealer orders",
+    )
+    summary = assemble_leads([row])
+    assert row.lead_id in {item[0] for item in summary.rejected}
+    assert row.text("day0") == ""
+    assert row.status == "Needs Review"
+    assert "Copy QA: FAIL" in row.text("notes")
 
 
 def load_settings_root():

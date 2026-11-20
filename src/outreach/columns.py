@@ -67,7 +67,7 @@ INVALID_MARK = "Email check: INVALID"
 # the row already has a lead id; Grok is expected to write "Queued".
 DAY0_STATUSES = {"queued", "not sent", "ready"}
 
-STOP_PREFIXES = ("replied", "bounced", "stopped", "invalid", "completed", "closed")
+STOP_PREFIXES = ("replied", "bounced", "stopped", "invalid", "completed", "closed", "needs review")
 
 
 def header_name(key: str) -> str:

@@ -14,6 +14,7 @@ from outreach.calendar import add_business_days
 from outreach.columns import DAY0_STATUSES, STOP_PREFIXES, VALID_MARK
 from outreach.config import RampPhase
 from outreach.models import Lead
+from outreach.qa import QA_FAIL, QA_PASS, NEEDS_REVIEW, check_lead_copy
 from outreach.templates import followup_subject, looks_like_mail_merge_risk
 
 # After this status, send this touch, then wait this many business days.
@@ -154,6 +155,8 @@ def _classify(
 
 
 def _classify_day0(lead: Lead, claimed: dict[str, str]) -> tuple[int, str] | Skip:
+    if lead.status_key == NEEDS_REVIEW.casefold() or QA_FAIL in lead.text("notes"):
+        return Skip(lead.lead_id, "copy QA failed — Needs Review")
     if not lead.research_done:
         return Skip(lead.lead_id, "research status is not Done")
     if not lead.text("day0") or not lead.text("subject"):
@@ -166,6 +169,10 @@ def _classify_day0(lead: Lead, claimed: dict[str, str]) -> tuple[int, str] | Ski
         return Skip(lead.lead_id, f"duplicate of {owner}")
     if VALID_MARK not in lead.text("notes"):
         return Skip(lead.lead_id, "waiting on email verification")
+    if QA_PASS not in lead.text("notes"):
+        qa = check_lead_copy(lead)
+        if not qa.ok:
+            return Skip(lead.lead_id, f"copy QA failed — {qa.summary}")
     return (3, "day0")
 
 
