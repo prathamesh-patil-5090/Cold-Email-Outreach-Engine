@@ -102,7 +102,7 @@ outreach run             # verify, assemble, check, then print the send plan
 outreach run --confirm   # verify, assemble, check, and send
 ```
 
-`outreach find` opens Brave, searches Maharashtra, Gujarat, and Bengaluru manufacturers, and drops anyone already on this tracker or the earlier Client Leads sheet. It keeps a company only when the homepage and a contact page both load, a person is named next to an email on that site, and the three research fields pass copy QA. `--write` appends the rows. Subject and the four emails stay blank.
+`outreach find` opens Brave, searches Maharashtra, Gujarat, and Bengaluru manufacturers, and drops anyone already on this tracker or the earlier Client Leads sheet. It reads the company's contact, about, team, and brochure pages first. A personal address printed on that site wins. A shared inbox printed under a named person is next. A personal address that shows up only on a directory is noted and not used. The finder never invents a `firstname@domain` address. `--write` appends the rows. Subject and the four emails stay blank.
 
 `assemble` picks stable subject / Day 0 / Day 4 / Day 8 / Day 14 variants from the Lead ID (so the same row does not reshuffle). Copy QA rejects buzzwords, broken topic phrases, missing company/name joins, links/HTML, and overlong Day 0 bodies. Failures stay off the send queue as `Needs Review`.
 

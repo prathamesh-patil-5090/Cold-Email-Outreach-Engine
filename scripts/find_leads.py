@@ -3,10 +3,11 @@
 
 Reads the current tracker, plus earlier batches in config/settings.yaml, and
 drops any company, domain, or email already listed. Opens Brave through
-Playwright, keeps Indian manufacturers in Maharashtra, Gujarat, or Bengaluru
-that name a person next to an email on their own site, and drafts the three
-research fields. Nothing is written unless --write is set. Subject and the
-four emails stay blank for `outreach assemble`.
+Playwright. Email order is: a personal address on the company's own site, then
+a shared inbox printed under a named person, then the general inbox on that
+site. A personal address found only on a directory is flagged and not written.
+The script never invents a firstname@domain address. Nothing is written unless
+--write is set. Subject and the four emails stay blank for `outreach assemble`.
 
   pip install -e ".[zoho]"
   python scripts/find_leads.py

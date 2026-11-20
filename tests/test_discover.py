@@ -1,4 +1,12 @@
-from outreach.discover import CapturedPage, Seen, company_key, consider_site, next_lead_id, seen_from_leads
+from outreach.discover import (
+    CapturedPage,
+    Seen,
+    company_key,
+    consider_site,
+    email_hunt_queries,
+    next_lead_id,
+    seen_from_leads,
+)
 from outreach.qa import check_research
 from tests.test_sheet_grid import lead
 
@@ -133,4 +141,87 @@ def test_personal_email_under_a_printed_name_wins():
     assert prospect is not None
     assert prospect.first_name == "Ramnik"
     assert prospect.email == "rgkotecha@rgkgroup.net"
+    assert prospect.email_kind == "personal"
     assert prospect.topic == "foundry orders"
+
+
+def test_personal_address_on_the_company_site_beats_a_shared_inbox():
+    home = CapturedPage(
+        url="https://aximindia.com/",
+        title="Axim India",
+        h1="Axim India",
+        text=(
+            "Axim India is a manufacturer of organic pigment powders and emulsions "
+            "at its Vatva GIDC shed and exports them. " * 5
+        ),
+    )
+    contact = CapturedPage(
+        url="https://aximindia.com/contact.html",
+        title="Contact Us",
+        h1="Contact Us",
+        text=(
+            "Nishant Agrawal\n"
+            "(Chairman)\n"
+            "E-mail: axim.india@gmail.com\n"
+            "Kathan Agrawal\n"
+            "(CEO)\n"
+            "E-mail: info@aximindia.com\n"
+            "Vatva GIDC Ahmedabad\n"
+        ),
+    )
+    prospect, reason = consider_site(home, [contact], Seen(), today="2026-11-21")
+    assert reason == "ok"
+    assert prospect is not None
+    assert prospect.first_name == "Nishant"
+    assert prospect.email == "axim.india@gmail.com"
+    assert prospect.email_kind == "personal"
+
+
+def test_directory_personal_email_is_flagged_and_not_used():
+    home = CapturedPage(
+        url="https://www.shubhamautomation.co.in/",
+        title="Shubham Automation",
+        h1="Shubham Automation",
+        text=(
+            "Shubham Automation is a manufacturer of packaging-line machines "
+            "at Manufacturing Unit 1 and Manufacturing Unit 2 in Vatva GIDC. " * 4
+        ),
+    )
+    about = CapturedPage(
+        url="https://www.shubhamautomation.co.in/about-us/",
+        title="About Us",
+        h1="About",
+        text="Biren Patel\nDirector\nHeaded by Biren Patel, marketing and sales, from the about page of the company.\n",
+    )
+    contact = CapturedPage(
+        url="https://www.shubhamautomation.co.in/contact-us/",
+        title="Contact Us",
+        h1="Contact",
+        text="Business inquiries for the Vatva works.\nEmail: sales@shubhamautomation.co.in\nVatva GIDC, Ahmedabad.\n",
+    )
+    directory = CapturedPage(
+        url="https://directory.aicc.ind.in/shubham-automation-services/",
+        title="AICC directory",
+        h1="Shubham Automation",
+        text="Directory listing. Biren Patel biren@shubhamautomation.co.in. The address on this listing is old.\n",
+        source="third_party",
+    )
+    prospect, reason = consider_site(home, [about, contact, directory], Seen(), today="2026-11-21")
+    assert reason == "ok"
+    assert prospect is not None
+    assert prospect.email == "sales@shubhamautomation.co.in"
+    assert prospect.first_name == "Biren"
+    assert "biren@shubhamautomation.co.in" not in prospect.email
+    assert "Third-party only, not used: biren@shubhamautomation.co.in" in prospect.notes
+
+
+def test_hunt_queries_do_not_invent_an_address():
+    queries = email_hunt_queries(
+        "Shubham Automation",
+        ["Biren Patel", "Prashant Patel"],
+        "shubhamautomation.co.in",
+        "sales@shubhamautomation.co.in",
+    )
+    assert queries
+    assert any('"biren@"' in query for query in queries)
+    assert all("biren@shubhamautomation.co.in" not in query for query in queries)

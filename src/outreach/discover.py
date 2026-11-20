@@ -119,8 +119,9 @@ PRODUCT_PHRASES = (
     "sheet metal stamping",
 )
 
-ROLE_LOCALS = {"ceo", "director", "md", "works"}
-GENERAL_LOCALS = {"info", "sales", "contact"}
+# Printed under a named person, but still a shared inbox.
+NAMED_INBOX_LOCALS = {"info", "sales", "contact", "works", "ceo", "director", "md"}
+SKIP_LOCALS = {"career", "careers", "hr", "purchase", "webmaster", "noreply", "support", "admin"}
 JUNK_EMAIL_PARTS = ("example.com", "wixpress", "sentry.io", "godaddy", "schema.org", "domain.com")
 BAD_NAME_TOKENS = {
     "contact",
@@ -188,6 +189,7 @@ class CapturedPage:
     title: str
     h1: str
     text: str
+    source: str = "own"
 
 
 @dataclass(frozen=True)
@@ -201,6 +203,7 @@ class Prospect:
     topic: str
     website: str
     notes: str
+    email_kind: str = "named"
 
     def row(self, lead_id: str) -> list[str]:
         """A–T. Subject through Next Action Date stay blank for assemble/send."""
@@ -300,14 +303,17 @@ def consider_site(
     if len(home.text.strip()) < 200:
         return None, "homepage did not load"
     loaded_extras = [page for page in extras if len(page.text.strip()) >= 80]
-    if not loaded_extras:
+    own_extras = [page for page in loaded_extras if page.source != "third_party"]
+    if not own_extras:
         return None, "contact or about page did not load"
     company = company_name(home)
     if not company:
         return None, "company name was not on the page"
     if company_key(company) in seen.companies:
         return None, "company already on the tracker"
-    combined = "\n".join([home.text, *[page.text for page in loaded_extras]])
+    own_pages = [home, *own_extras]
+    third_pages = [page for page in loaded_extras if page.source == "third_party"]
+    combined = "\n".join(page.text for page in own_pages)
     low = combined.lower()
     if not _has_geo(low):
         return None, "not in Maharashtra, Gujarat, or Bengaluru"
@@ -315,10 +321,12 @@ def consider_site(
         return None, "not a manufacturer, fabricator, oem, or distributor"
     if not _has_multi(low):
         return None, "no multi-plant, multi-step, or dispatch flow"
-    pair = _best_pair(home, loaded_extras)
+    pair = _best_pair(own_pages)
+    if pair is None:
+        pair = _fallback_pair(own_pages)
     if pair is None:
         return None, "no named person with an email on the site"
-    first_name, email, pair_note = pair
+    first_name, email, pair_note, email_kind = pair
     if email.casefold() in seen.emails:
         return None, "email already on the tracker"
     email_domain = email.split("@", 1)[1]
@@ -337,8 +345,12 @@ def consider_site(
     )
     if not qa.ok:
         return None, f"research QA: {qa.summary}"
-    website = loaded_extras[0].url or home.url
+    website = next((page.url for page in own_pages[1:] if page.url), home.url)
     notes = f"Researched {today}; {website}; {pair_note}"
+    flagged = _third_party_personal(third_pages, _first_names(own_pages))
+    flagged = [item for item in flagged if item != email]
+    if flagged:
+        notes += "; Third-party only, not used: " + ", ".join(flagged)
     return (
         Prospect(
             company=company,
@@ -350,6 +362,7 @@ def consider_site(
             topic=topic,
             website=website,
             notes=notes,
+            email_kind=email_kind,
         ),
         "ok",
     )
@@ -424,18 +437,70 @@ def _unit_count(low: str) -> int:
     return 0
 
 
-def _best_pair(
-    home: CapturedPage, extras: list[CapturedPage]
-) -> tuple[str, str, str] | None:
-    ranked: list[tuple[int, str, str, str]] = []
-    for page in (home, *extras):
+def email_hunt_queries(company: str, names: list[str], domain: str, current_email: str) -> list[str]:
+    """Search strings only. This never invents a firstname@domain address."""
+    queries: list[str] = []
+    if names and current_email:
+        first = names[0].split()[0]
+        queries.append(f"{company} {first} {current_email} official website contact director email")
+    quoted = []
+    for name in names[:3]:
+        first = name.split()[0].casefold()
+        if len(first) >= 3 and first not in BAD_NAME_TOKENS:
+            quoted.append(f'"{first}@"')
+    if quoted and domain and domain not in SHARED_EMAIL_DOMAINS:
+        queries.append(" OR ".join(quoted) + f" {domain}")
+    return queries
+
+
+def named_people(pages: list[CapturedPage]) -> list[str]:
+    found: list[str] = []
+    for page in pages:
+        if page.source == "third_party":
+            continue
+        for _first, full in _people_on_page(page.text):
+            if full not in found:
+                found.append(full)
+    return found
+
+
+def _best_pair(pages: list[CapturedPage]) -> tuple[str, str, str, str] | None:
+    ranked: list[tuple[int, str, str, str, str]] = []
+    for page in pages:
+        if page.source == "third_party":
+            continue
         for rank, first, email, note in _pairs_on_page(page.text):
-            ranked.append((rank, first, email, note))
+            kind = "personal" if rank == 0 else "named"
+            ranked.append((rank, first, email, note, kind))
     if not ranked:
         return None
     ranked.sort(key=lambda item: item[0])
-    _rank, first, email, note = ranked[0]
-    return first, email, note
+    _rank, first, email, note, kind = ranked[0]
+    return first, email, note, kind
+
+
+def _fallback_pair(pages: list[CapturedPage]) -> tuple[str, str, str, str] | None:
+    """General inbox on the site, plus a decision-maker named somewhere on the site."""
+    people: list[tuple[str, str]] = []
+    emails: list[str] = []
+    for page in pages:
+        if page.source == "third_party":
+            continue
+        for person in _people_on_page(page.text):
+            if person not in people:
+                people.append(person)
+        for line in page.text.splitlines():
+            for email in _emails_in(line):
+                if email.split("@", 1)[0] in NAMED_INBOX_LOCALS and email not in emails:
+                    emails.append(email)
+    if not people or not emails:
+        return None
+    order = ["sales", "info", "contact", "works", "ceo", "director", "md"]
+    emails.sort(key=lambda email: order.index(email.split("@", 1)[0]) if email.split("@", 1)[0] in order else 99)
+    email = emails[0]
+    first, full = people[0]
+    local = email.split("@", 1)[0]
+    return first, email, f"{local}@ on the site; first name {full} from the site", "general"
 
 
 def _pairs_on_page(text: str) -> list[tuple[int, str, str, str]]:
@@ -509,17 +574,60 @@ def _clean_person(raw: str) -> tuple[str, str] | None:
 
 
 def _email_rank(email: str, full_name: str) -> int | None:
+    """0 = personal address printed under a person. 1 = shared inbox printed under a person.
+
+    full_name is part of the call so a future check can require the local part
+    to contain the name. An address is personal when the site prints it under
+    someone and it is not a shared inbox. Nothing here invents firstname@domain.
+    """
+    del full_name
     local = email.split("@", 1)[0].lower()
-    compact = re.sub(r"[^a-z0-9]", "", local)
-    tokens = [token.lower() for token in full_name.split() if len(token) >= 4]
-    personal = any(token in compact for token in tokens) and compact not in ROLE_LOCALS | GENERAL_LOCALS
-    if personal:
-        return 0
-    if local in ROLE_LOCALS:
+    if local in SKIP_LOCALS:
+        return None
+    if local in NAMED_INBOX_LOCALS:
         return 1
-    if local in GENERAL_LOCALS:
-        return 2
-    return None
+    return 0
+
+
+def _people_on_page(text: str) -> list[tuple[str, str]]:
+    rows = [line.strip() for line in text.splitlines() if line.strip()]
+    found: list[tuple[str, str]] = []
+    for index, line in enumerate(rows):
+        match = MR_RE.search(line)
+        named = _clean_person(match.group(1)) if match else None
+        if named is None:
+            plain = PLAIN_NAME_RE.match(line)
+            if plain:
+                neighbors = []
+                if index + 1 < len(rows):
+                    neighbors.append(rows[index + 1])
+                if index - 1 >= 0:
+                    neighbors.append(rows[index - 1])
+                if any(ROLE_RE.search(neighbor) for neighbor in neighbors):
+                    named = _clean_person(plain.group(1))
+        if named and named not in found:
+            found.append(named)
+    return found
+
+
+def _first_names(pages: list[CapturedPage]) -> set[str]:
+    return {first.casefold() for first, _full in (person for page in pages for person in _people_on_page(page.text))}
+
+
+def _third_party_personal(pages: list[CapturedPage], first_names: set[str]) -> list[str]:
+    found: list[str] = []
+    for page in pages:
+        if page.source != "third_party":
+            continue
+        for line in page.text.splitlines():
+            for email in _emails_in(line):
+                local = re.sub(r"[^a-z0-9]", "", email.split("@", 1)[0].lower())
+                if local in NAMED_INBOX_LOCALS or local in SKIP_LOCALS:
+                    continue
+                personal = any(len(name) >= 3 and name in local for name in first_names)
+                if personal and email not in found:
+                    found.append(email)
+    return found
 
 
 def _draft_fields(low: str, original: str) -> tuple[str, str, str] | None:
