@@ -2,6 +2,9 @@
 # Headers are discovered by name. If the Grok bot has not written them yet,
 # the commands wait and do not create columns or leads.
 spreadsheet_id: "1E-A_q42Jjd3S57UliOArAwABhfDOxJJBoJP3SxaNfrc"
+# Earlier batches. A candidate that matches a company, domain, or email here is dropped.
+prior_spreadsheet_ids:
+  - "10bG1KRHdNJBlngmKfxe71thZ5IkMk2wUvJBbhxXV_K8"
 worksheet: "Outreach Tracker"
 timezone: "Asia/Kolkata"
 campaign_start: "2026-11-19"

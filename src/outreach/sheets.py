@@ -23,6 +23,36 @@ class GoogleSheetRepository:
         self._columns = _column_index(rows, data.header_row)
         return data
 
+    def load_spreadsheet(self, spreadsheet_id: str) -> SheetData:
+        rows = self._values(
+            f"{_quote(self.settings.worksheet)}!A1:T5000",
+            spreadsheet_id=spreadsheet_id,
+        )
+        return parse_grid(rows)
+
+    def append_rows(self, rows: list[list[str]]) -> str:
+        if not rows:
+            return ""
+        from googleapiclient.errors import HttpError
+
+        try:
+            result = (
+                self._api()
+                .spreadsheets()
+                .values()
+                .append(
+                    spreadsheetId=self.settings.spreadsheet_id,
+                    range=f"{_quote(self.settings.worksheet)}!A1:T1",
+                    valueInputOption="RAW",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": rows},
+                )
+                .execute()
+            )
+        except HttpError as exc:
+            raise ConfigError(f"Could not append leads: {exc}") from exc
+        return result.get("updates", {}).get("updatedRange", "")
+
     def save(self, lead: Lead) -> None:
         if not lead.dirty:
             return
@@ -46,7 +76,7 @@ class GoogleSheetRepository:
             raise ConfigError(f"Could not update row {lead.row_number}: {exc}") from exc
         lead.dirty.clear()
 
-    def _values(self, range_name: str) -> list[list[object]]:
+    def _values(self, range_name: str, spreadsheet_id: str | None = None) -> list[list[object]]:
         from googleapiclient.errors import HttpError
 
         try:
@@ -55,7 +85,7 @@ class GoogleSheetRepository:
                 .spreadsheets()
                 .values()
                 .get(
-                    spreadsheetId=self.settings.spreadsheet_id,
+                    spreadsheetId=spreadsheet_id or self.settings.spreadsheet_id,
                     range=range_name,
                     valueRenderOption="FORMATTED_VALUE",
                 )

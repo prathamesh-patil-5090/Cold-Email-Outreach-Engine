@@ -13,6 +13,7 @@ from outreach.calendar import in_send_window, today_in
 from outreach.columns import (
     ASSEMBLE_COLUMNS,
     COLUMNS,
+    FIND_COLUMNS,
     SEND_COLUMNS,
     VERIFY_COLUMNS,
     missing_headers,
@@ -38,6 +39,13 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("status", help="Show whether the sheet is ready and how many leads are queued")
     sub.add_parser("prompt", help="Print the 5-lead Grok discovery prompt")
+    find = sub.add_parser(
+        "find",
+        help="Search Brave for new manufacturers and draft research rows A–K and T",
+    )
+    find.add_argument("--write", action="store_true", help="Append the rows. Without this, print only")
+    find.add_argument("--limit", type=int, default=5, help="How many new leads to keep (default 5)")
+    find.add_argument("--headless", action="store_true", help="Hide the Brave window")
     sub.add_parser("verify", help="MX-check queued emails and record the result in Notes")
     assemble = sub.add_parser("assemble", help="Fill subject and the four emails from research fields")
     assemble.add_argument(
@@ -76,6 +84,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         print(_status(data))
         return 0
+    if args.command == "find":
+        return _find(data, repo, settings, args)
     if args.command == "verify":
         return _verify(data, repo, settings)
     if args.command == "assemble":
@@ -106,6 +116,61 @@ def _send_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-sends", type=int, default=None)
     parser.add_argument("--ignore-window", action="store_true", help="Allow sends outside 09:30–17:30 IST weekdays")
     parser.add_argument("--retry-unconfirmed", action="store_true", help="Retry a touch whose SMTP result was never confirmed")
+
+
+def _find(data: SheetData, repo, settings, args) -> int:
+    if not _guard(data, FIND_COLUMNS):
+        return 0
+    from outreach.brave_search import find_prospects
+    from outreach.discover import next_lead_id, seen_from_leads
+
+    seen = seen_from_leads(data.leads)
+    for prior in settings.prior_spreadsheet_ids:
+        if prior == settings.spreadsheet_id:
+            continue
+        try:
+            earlier = repo.load_spreadsheet(prior)
+        except ConfigError as exc:
+            print(f"Earlier batch not read: {exc}")
+            continue
+        seen = seen.union(seen_from_leads(earlier.leads))
+        print(f"Dedupe includes {len(earlier.leads)} earlier leads.")
+    today = today_in(ZoneInfo(settings.timezone)).isoformat()
+    try:
+        prospects = find_prospects(
+            seen,
+            today=today,
+            limit=max(1, args.limit),
+            headless=bool(args.headless),
+        )
+    except ConfigError as exc:
+        print(exc)
+        return 2
+    if not prospects:
+        print("No new lead passed the fit and contact checks.")
+        return 0
+    lead_ids = []
+    number = next_lead_id(data.leads)
+    rows = []
+    for prospect in prospects:
+        lead_ids.append(number)
+        rows.append(prospect.row(number))
+        print(f"{number}  {prospect.company}  {prospect.first_name}  {prospect.email}")
+        print(f"  trigger: {prospect.trigger}")
+        print(f"  handoff: {prospect.handoff}")
+        print(f"  topic:   {prospect.topic}")
+        number = _bump_lead_id(number)
+    if not args.write:
+        print("Dry run. Re-run with --write to append these rows. Subject and emails stay blank.")
+        return 0
+    updated = repo.append_rows(rows)
+    print(f"Appended {len(rows)} row(s) to {updated or 'the tracker'}.")
+    return 0
+
+
+def _bump_lead_id(lead_id: str) -> str:
+    prefix, _, number = lead_id.rpartition("-")
+    return f"{prefix}-{int(number) + 1:03d}"
 
 
 def _verify(data: SheetData, repo, settings) -> int:

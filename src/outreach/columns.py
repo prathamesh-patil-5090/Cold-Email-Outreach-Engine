@@ -50,6 +50,20 @@ ASSEMBLE_COLUMNS: tuple[str, ...] = (
     "day8",
     "day14",
 )
+FIND_COLUMNS: tuple[str, ...] = (
+    "lead_id",
+    "research_status",
+    "outreach_status",
+    "company",
+    "first_name",
+    "email",
+    "industry",
+    "trigger",
+    "handoff",
+    "topic",
+    "notes",
+)
+
 SEND_COLUMNS: tuple[str, ...] = ASSEMBLE_COLUMNS + (
     "email",
     "outreach_status",

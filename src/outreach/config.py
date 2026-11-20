@@ -54,6 +54,7 @@ class BusinessHours:
 @dataclass(frozen=True)
 class Settings:
     spreadsheet_id: str
+    prior_spreadsheet_ids: tuple[str, ...]
     worksheet: str
     timezone: str
     campaign_start: date
@@ -125,8 +126,10 @@ def load_settings(root: Path | None = None) -> Settings:
     )
     if not ramp:
         raise ConfigError("Ramp schedule is empty.")
+    prior = raw.get("prior_spreadsheet_ids") or []
     return Settings(
         spreadsheet_id=os.environ.get("SPREADSHEET_ID", raw["spreadsheet_id"]).strip(),
+        prior_spreadsheet_ids=tuple(str(item).strip() for item in prior if str(item).strip()),
         worksheet=os.environ.get("WORKSHEET_NAME", raw.get("worksheet", "Outreach Tracker")).strip(),
         timezone=raw.get("timezone", "Asia/Kolkata"),
         campaign_start=date.fromisoformat(str(raw["campaign_start"])),

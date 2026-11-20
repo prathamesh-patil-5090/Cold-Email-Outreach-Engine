@@ -10,7 +10,7 @@ The sheet is allowed to be empty. If the `Lead ID` header or a later column is n
 
 | Columns | Who |
 | --- | --- |
-| A–K and T (`Lead ID` through `Short Workflow Topic`, plus `Notes`) | Grok bot |
+| A–K and T (`Lead ID` through `Short Workflow Topic`, plus `Notes`) | `outreach find --write`, or the Grok bot |
 | L–P (`Subject Line` and the four emails) | `outreach assemble` |
 | G and T, email check note | `outreach verify` |
 | C, D, Q, R, S after a send | `outreach send --confirm` |
@@ -87,6 +87,9 @@ The reply inbox does not need an app password.
 ## Commands
 
 ```bash
+outreach find            # Brave search for 5 new leads; prints rows, writes nothing
+outreach find --write    # append those research rows (A–K and T). L–S stay blank
+python scripts/find_leads.py --write
 outreach prompt          # discovery prompt for the Grok bot, with today's date filled in
 outreach status          # headers, lead count, and anything still missing
 outreach verify          # MX-check queued rows
@@ -98,6 +101,8 @@ outreach send --confirm  # send during the window, then wait out the per-mailbox
 outreach run             # verify, assemble, check, then print the send plan
 outreach run --confirm   # verify, assemble, check, and send
 ```
+
+`outreach find` opens Brave, searches Maharashtra, Gujarat, and Bengaluru manufacturers, and drops anyone already on this tracker or the earlier Client Leads sheet. It keeps a company only when the homepage and a contact page both load, a person is named next to an email on that site, and the three research fields pass copy QA. `--write` appends the rows. Subject and the four emails stay blank.
 
 `assemble` picks stable subject / Day 0 / Day 4 / Day 8 / Day 14 variants from the Lead ID (so the same row does not reshuffle). Copy QA rejects buzzwords, broken topic phrases, missing company/name joins, links/HTML, and overlong Day 0 bodies. Failures stay off the send queue as `Needs Review`.
 
