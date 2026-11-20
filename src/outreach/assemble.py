@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from outreach.columns import COLUMNS
+from outreach.columns import COLUMNS, DAY0_STATUSES
 from outreach.models import Lead
-from outreach.qa import QA_FAIL, apply_qa_result, check_research, check_sequence
+from outreach.qa import NEEDS_REVIEW, apply_qa_result, check_research, check_sequence
 from outreach.templates import render_sequence
 
 RESEARCH_FIELDS = ("trigger", "handoff", "topic", "company", "first_name")
+FORCEABLE = DAY0_STATUSES | {NEEDS_REVIEW.casefold(), ""}
 
 
 @dataclass
@@ -20,12 +21,16 @@ class AssembleSummary:
     rejected: list[tuple[str, str]] = field(default_factory=list)
 
 
-def assemble_leads(leads: list[Lead]) -> AssembleSummary:
+def assemble_leads(leads: list[Lead], *, force: bool = False) -> AssembleSummary:
     summary = AssembleSummary()
     for lead in leads:
         if not lead.lead_id:
             continue
-        if lead.text("subject") or lead.text("day0"):
+        has_copy = bool(lead.text("subject") or lead.text("day0"))
+        if has_copy and not force:
+            summary.already.append(lead.lead_id)
+            continue
+        if has_copy and force and lead.status_key not in FORCEABLE:
             summary.already.append(lead.lead_id)
             continue
         if not lead.research_done:
@@ -45,6 +50,11 @@ def assemble_leads(leads: list[Lead]) -> AssembleSummary:
             topic=lead.text("topic"),
         )
         if not research.ok:
+            # Force rewrites should not leave stale L–P sitting on a failed row.
+            if force:
+                for key in ("subject", "day0", "day4", "day8", "day14"):
+                    if lead.text(key):
+                        lead.set_field(key, "")
             apply_qa_result(lead, research)
             summary.rejected.append((lead.lead_id, research.summary))
             continue
@@ -64,6 +74,10 @@ def assemble_leads(leads: list[Lead]) -> AssembleSummary:
             topic=lead.text("topic"),
         )
         if not copy.ok:
+            if force:
+                for key in ("subject", "day0", "day4", "day8", "day14"):
+                    if lead.text(key):
+                        lead.set_field(key, "")
             apply_qa_result(lead, copy, variant_key=sequence.variant_key)
             summary.rejected.append((lead.lead_id, copy.summary))
             continue

@@ -39,7 +39,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("status", help="Show whether the sheet is ready and how many leads are queued")
     sub.add_parser("prompt", help="Print the 5-lead Grok discovery prompt")
     sub.add_parser("verify", help="MX-check queued emails and record the result in Notes")
-    sub.add_parser("assemble", help="Fill subject and the four emails from research fields")
+    assemble = sub.add_parser("assemble", help="Fill subject and the four emails from research fields")
+    assemble.add_argument(
+        "--force",
+        action="store_true",
+        help="Rewrite Subject + Day 0/4/8/14 even when copy already exists (Queued rows only stay safest)",
+    )
     sub.add_parser("check", help="QA research fields and assembled copy; mark bad rows Needs Review")
     sub.add_parser("sync-db", help="Upsert the current Outreach Tracker rows into Postgres (DATABASE_URL)")
 
@@ -74,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "verify":
         return _verify(data, repo, settings)
     if args.command == "assemble":
-        return _assemble(data, repo, settings)
+        return _assemble(data, repo, settings, force=bool(getattr(args, "force", False)))
     if args.command == "check":
         return _check(data, repo, settings)
     if args.command == "sync-db":
@@ -129,10 +134,10 @@ def _verify(data: SheetData, repo, settings) -> int:
     return 0
 
 
-def _assemble(data: SheetData, repo, settings=None) -> int:
+def _assemble(data: SheetData, repo, settings=None, force: bool = False) -> int:
     if not _guard(data, ASSEMBLE_COLUMNS):
         return 0
-    summary = assemble_leads(data.leads)
+    summary = assemble_leads(data.leads, force=force)
     for lead in data.leads:
         if lead.dirty:
             repo.save(lead)

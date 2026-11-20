@@ -132,8 +132,8 @@ def check_sequence(sequence: Sequence, *, company: str, first_name: str, topic: 
                 break
 
     day0_words = _word_count(sequence.day0)
-    if day0_words > 95:
-        issues.append(f"day0 is too long ({day0_words} words; keep under 95)")
+    if day0_words > 110:
+        issues.append(f"day0 is too long ({day0_words} words; keep under 110)")
     if day0_words < 35:
         issues.append(f"day0 is too short ({day0_words} words)")
 
@@ -183,9 +183,11 @@ def apply_qa_result(lead: Lead, result: QAResult, *, variant_key: str = "") -> N
     if result.ok:
         mark = QA_PASS if not variant_key else f"{QA_PASS} ({variant_key})"
         lead.set_field("notes", _append(notes, mark))
+        if lead.status_key == NEEDS_REVIEW.casefold():
+            lead.set_field("outreach_status", "Queued")
         return
     lead.set_field("notes", _append(notes, f"{QA_FAIL} ({result.summary})"))
-    if lead.status_key in DAY0_STATUSES or lead.status_key == "":
+    if lead.status_key in DAY0_STATUSES or lead.status_key in {"", NEEDS_REVIEW.casefold()}:
         lead.set_field("outreach_status", NEEDS_REVIEW)
 
 

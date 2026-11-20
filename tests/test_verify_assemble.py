@@ -98,8 +98,11 @@ def test_assemble_waits_until_research_fields_exist_and_does_not_overwrite():
     assert done.text("day0") == "already sent"
     assert ready.lead_id in summary.assembled
     assert "Acme Pvt. Ltd." in ready.text("subject")
-    assert "fabrication jobs" in ready.text("subject") or "fabrication jobs" in ready.text("day0")
-    assert "two units in Wagle Estate" in ready.text("day0") or "two units in Wagle Estate" in ready.text("day8")
+    assert "fabrication jobs" in ready.text("subject")
+    assert ready.text("day0").startswith("Hi Asha,\n\n")
+    assert "software developer" in ready.text("day0")
+    assert "two units in Wagle Estate" in ready.text("day0")
+    assert ready.text("day0").endswith("pratz.is-a.dev")
     assert "Copy QA: PASS" in ready.text("notes")
 
 
