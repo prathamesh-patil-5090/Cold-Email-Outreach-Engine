@@ -10,8 +10,11 @@ Requires-Dist: google-api-python-client>=2.149.0
 Requires-Dist: google-auth>=2.35.0
 Requires-Dist: PyYAML>=6.0.2
 Requires-Dist: python-dotenv>=1.0.1
+Requires-Dist: psycopg[binary]>=3.2.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3.0; extra == "dev"
+Provides-Extra: zoho
+Requires-Dist: playwright>=1.48.0; extra == "zoho"
 
 # Outreach engine
 
@@ -39,13 +42,38 @@ Day 0 through Day 14 are the same copy as `LEAD-002` onward. Subject is `Questio
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -e ".[dev]"
 cp .env.example .env
 ```
 
-Create a Google service account, put the JSON path in `GOOGLE_SERVICE_ACCOUNT_FILE`, and share **Client Leads status** with that account as Editor. Create one Zoho app password per outreach mailbox and fill the seven `ZOHO_APP_PASSWORD_...` values. The reply inbox does not need one.
+### Google service account (`service-account.json`)
 
-`config/settings.yaml` points at the live spreadsheet. `SMTP_HOST` defaults to `smtp.zoho.in`.
+Your Google login can open the sheet in the browser. The Python worker cannot use that login. It needs a **service account** JSON key, then the sheet must be shared with that robot email as Editor.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create or pick a project.
+2. **APIs & Services → Library** → enable **Google Sheets API**.
+3. **APIs & Services → Credentials → Create credentials → Service account**.
+   - Name it something like `outreach-engine`.
+   - Skip optional roles. Click **Done**.
+4. Open the new service account → **Keys → Add key → Create new key → JSON**.
+5. Download the file and move it into this repo as `service-account.json` (already in `.gitignore`):
+
+```bash
+cp ~/Downloads/your-project-xxxxx.json ./service-account.json
+```
+
+6. Open the JSON and copy `client_email` (looks like `outreach-engine@your-project.iam.gserviceaccount.com`).
+7. In the Google Sheet, click **Share**, paste that email, set role to **Editor**, uncheck “Notify people”, then Share.
+8. In `.env`:
+
+```bash
+GOOGLE_SERVICE_ACCOUNT_FILE=./service-account.json
+```
+
+`config/settings.yaml` already points at the Test spreadsheet (`1E-A_q42Jjd3S57UliOArAwABhfDOxJJBoJP3SxaNfrc`). Override with `SPREADSHEET_ID=` in `.env` if you switch sheets later. `SMTP_HOST` defaults to `smtp.zoho.in`.
+
+Create one Zoho app password per outreach mailbox and fill the seven `ZOHO_APP_PASSWORD_...` values. The reply inbox does not need one.
 
 ## Commands
 

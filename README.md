@@ -29,9 +29,60 @@ pip install -e ".[dev]"
 cp .env.example .env
 ```
 
-Create a Google service account, put the JSON path in `GOOGLE_SERVICE_ACCOUNT_FILE`, and share **Client Leads status** with that account as Editor. Create one Zoho app password per outreach mailbox and fill the seven `ZOHO_APP_PASSWORD_...` values. The reply inbox does not need one.
+### Google service account (`service-account.json`)
 
-`config/settings.yaml` points at the live spreadsheet. `SMTP_HOST` defaults to `smtp.zoho.in`.
+Your Google login can open the sheet in the browser. The Python worker cannot use that login. It needs a **service account** JSON key, then the sheet must be shared with that robot email as Editor.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create or pick a project.
+2. **APIs & Services → Library** → enable **Google Sheets API**.
+3. **APIs & Services → Credentials → Create credentials → Service account**.
+   - Name it something like `outreach-engine`.
+   - Skip optional roles. Click **Done**.
+4. Open the new service account → **Keys → Add key → Create new key → JSON**.
+5. Download the file and move it into this repo as `service-account.json` (already in `.gitignore`):
+
+```bash
+cp ~/Downloads/your-project-xxxxx.json ./service-account.json
+```
+
+6. Open the JSON and copy `client_email` (looks like `outreach-engine@your-project.iam.gserviceaccount.com`).
+7. In the Google Sheet, click **Share**, paste that email, set role to **Editor**, uncheck “Notify people”, then Share.
+8. In `.env`:
+
+```bash
+GOOGLE_SERVICE_ACCOUNT_FILE=./service-account.json
+```
+
+`config/settings.yaml` already points at the Test spreadsheet (`1E-A_q42Jjd3S57UliOArAwABhfDOxJJBoJP3SxaNfrc`). Override with `SPREADSHEET_ID=` in `.env` if you switch sheets later. `SMTP_HOST` defaults to `smtp.zoho.in`.
+
+### Postgres mirror
+
+Set `DATABASE_URL` in `.env` (Neon / any Postgres). Then:
+
+```bash
+outreach sync-db
+```
+
+That creates `leads` + `send_events` (see `sql/schema.sql`) and upserts every current sheet row. `verify`, `assemble`, and a confirmed `send` also sync when `DATABASE_URL` is set.
+
+### Zoho app passwords (Playwright)
+
+All seven outreach mailboxes share one Zoho web login password. Put that in `.env` as `ZOHO_LOGIN_PASSWORD`, then:
+
+```bash
+pip install -e ".[zoho]"
+playwright install chromium
+python scripts/fetch_zoho_app_passwords.py
+```
+
+A Chromium window opens for each mailbox, signs in at `accounts.zoho.in`, opens [Security → App Passwords](https://accounts.zoho.in/home#security/app_password), clicks **+ Generate New Password**, and writes the result into the matching `ZOHO_APP_PASSWORD_...` line in `.env`. If Zoho asks for MFA/CAPTCHA, complete it in the window (default wait 120s).
+
+```bash
+python scripts/fetch_zoho_app_passwords.py --only p.patil@pratz.is-a.dev
+python scripts/fetch_zoho_app_passwords.py --dry-run
+```
+
+The reply inbox does not need an app password.
 
 ## Commands
 
@@ -40,6 +91,7 @@ outreach prompt          # discovery prompt for the Grok bot, with today's date 
 outreach status          # headers, lead count, and anything still missing
 outreach verify          # MX-check queued rows
 outreach assemble        # fill L–P where I, J, and K are present and the emails are blank
+outreach sync-db         # upsert sheet rows into Postgres
 outreach send            # dry-run of today's queue
 outreach send --confirm  # send during the window, then wait out the per-mailbox jitter
 outreach run             # verify, assemble, and print the send plan

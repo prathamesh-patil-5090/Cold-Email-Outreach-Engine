@@ -193,6 +193,12 @@ def run_sends(
         state.save()
         apply_send(lead, record)
         try:
+            from outreach.db import sync_send_record
+
+            sync_send_record(settings, record)
+        except Exception:
+            pass
+        try:
             repo.save(lead)
         except Exception as exc:  # sheet sync is retried on the next run
             summary.failed.append((job.lead_id, f"sent but sheet update failed: {exc}"))
@@ -202,6 +208,12 @@ def run_sends(
         record.sheet_synced = True
         state.upsert(record)
         state.save()
+        try:
+            from outreach.db import sync_send_record
+
+            sync_send_record(settings, record)
+        except Exception:
+            pass
         summary.sent.append(job.lead_id)
         sent_count += 1
         gap = rng.randint(phase.jitter_min_seconds, phase.jitter_max_seconds)

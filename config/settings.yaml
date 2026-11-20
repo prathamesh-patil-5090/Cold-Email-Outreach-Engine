@@ -1,7 +1,7 @@
-# Live spreadsheet: "Client Leads status" → tab "Outreach Tracker".
+# Active spreadsheet → tab "Outreach Tracker".
 # Headers are discovered by name. If the Grok bot has not written them yet,
 # the commands wait and do not create columns or leads.
-spreadsheet_id: "10bG1KRHdNJBlngmKfxe71thZ5IkMk2wUvJBbhxXV_K8"
+spreadsheet_id: "1E-A_q42Jjd3S57UliOArAwABhfDOxJJBoJP3SxaNfrc"
 worksheet: "Outreach Tracker"
 timezone: "Asia/Kolkata"
 campaign_start: "2026-11-19"

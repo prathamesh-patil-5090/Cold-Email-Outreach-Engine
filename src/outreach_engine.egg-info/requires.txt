@@ -4,6 +4,10 @@ google-api-python-client>=2.149.0
 google-auth>=2.35.0
 PyYAML>=6.0.2
 python-dotenv>=1.0.1
+psycopg[binary]>=3.2.0
 
 [dev]
 pytest>=8.3.0
+
+[zoho]
+playwright>=1.48.0

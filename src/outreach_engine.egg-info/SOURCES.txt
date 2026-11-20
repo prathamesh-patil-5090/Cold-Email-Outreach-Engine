@@ -7,6 +7,7 @@ src/outreach/calendar.py
 src/outreach/cli.py
 src/outreach/columns.py
 src/outreach/config.py
+src/outreach/db.py
 src/outreach/mailer.py
 src/outreach/models.py
 src/outreach/plan.py
@@ -23,6 +24,7 @@ src/outreach_engine.egg-info/requires.txt
 src/outreach_engine.egg-info/top_level.txt
 tests/test_calendar.py
 tests/test_columns.py
+tests/test_db.py
 tests/test_plan_send.py
 tests/test_sheet_grid.py
 tests/test_templates.py

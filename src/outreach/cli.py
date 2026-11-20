@@ -40,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("prompt", help="Print the 5-lead Grok discovery prompt")
     sub.add_parser("verify", help="MX-check queued emails and record the result in Notes")
     sub.add_parser("assemble", help="Fill subject and the four emails from research fields")
+    sub.add_parser("sync-db", help="Upsert the current Outreach Tracker rows into Postgres (DATABASE_URL)")
 
     send = sub.add_parser("send", help="Send due touches. Dry-run unless --confirm is set")
     _send_flags(send)
@@ -72,7 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "verify":
         return _verify(data, repo, settings)
     if args.command == "assemble":
-        return _assemble(data, repo)
+        return _assemble(data, repo, settings)
+    if args.command == "sync-db":
+        return _sync_db(data, settings)
     if args.command == "send":
         return _send(data, repo, settings, args)
     if args.command == "run" and not data.ready:
@@ -81,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "run":
         if _verify(data, repo, settings) != 0:
             return 2
-        if _assemble(data, repo) != 0:
+        if _assemble(data, repo, settings) != 0:
             return 2
         return _send(data, repo, settings, args)
     return 2
@@ -117,10 +120,11 @@ def _verify(data: SheetData, repo, settings) -> int:
         print(f"{summary.waiting} queued row(s) have no contact email yet. Left untouched.")
     if not summary.checked and not summary.waiting:
         print("No queued emails are waiting for a check. Existing sent rows were left alone.")
+    _maybe_sync(settings, data.leads)
     return 0
 
 
-def _assemble(data: SheetData, repo) -> int:
+def _assemble(data: SheetData, repo, settings=None) -> int:
     if not _guard(data, ASSEMBLE_COLUMNS):
         return 0
     summary = assemble_leads(data.leads)
@@ -135,7 +139,36 @@ def _assemble(data: SheetData, repo) -> int:
             print(f"  {lead_id}: {reason}")
     elif not summary.assembled:
         print("No blank rows are ready to assemble.")
+    if settings is not None:
+        _maybe_sync(settings, data.leads)
     return 0
+
+
+def _sync_db(data: SheetData, settings) -> int:
+    if not data.ready:
+        print(WAITING)
+        return 0
+    from outreach.db import sync_leads
+
+    try:
+        summary = sync_leads(settings, data.leads)
+    except ConfigError as exc:
+        print(exc)
+        return 2
+    print(f"Upserted {summary.upserted} lead(s) into Postgres.")
+    return 0
+
+
+def _maybe_sync(settings, leads) -> None:
+    from outreach.db import maybe_sync_leads
+
+    try:
+        summary = maybe_sync_leads(settings, leads)
+    except Exception as exc:
+        print(f"Postgres sync skipped: {exc}")
+        return
+    if summary is not None:
+        print(f"Postgres: upserted {summary.upserted} lead(s).")
 
 
 def _send(data: SheetData, repo, settings, args) -> int:
@@ -205,6 +238,7 @@ def _send(data: SheetData, repo, settings, args) -> int:
         print(f"Failed {lead_id}: {detail}")
     if summary.deferred:
         print(f"Deferred {len(summary.deferred)} because the window or hourly cap closed.")
+    _maybe_sync(settings, data.leads)
     return 0
 
 
