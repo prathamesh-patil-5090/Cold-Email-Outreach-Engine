@@ -1,0 +1,61 @@
+# Live spreadsheet: "Client Leads status" → tab "Outreach Tracker".
+# Headers are discovered by name. If the Grok bot has not written them yet,
+# the commands wait and do not create columns or leads.
+spreadsheet_id: "10bG1KRHdNJBlngmKfxe71thZ5IkMk2wUvJBbhxXV_K8"
+worksheet: "Outreach Tracker"
+timezone: "Asia/Kolkata"
+campaign_start: "2026-11-19"
+
+business_hours:
+  start: "09:30"
+  end: "17:30"
+
+reply_to: "prathamesh@pratz.is-a.dev"
+
+smtp:
+  host: "smtp.zoho.in"
+  port: 587
+
+# Week 3+ daily cap is the middle of the 15–17 range in the PRD.
+ramp:
+  - name: week1
+    through_day: 7
+    daily_per_mailbox: 5
+    hourly_per_mailbox: 2
+    jitter_min_seconds: 1500
+    jitter_max_seconds: 2700
+  - name: week2
+    through_day: 14
+    daily_per_mailbox: 10
+    hourly_per_mailbox: 3
+    jitter_min_seconds: 900
+    jitter_max_seconds: 1500
+  - name: week3
+    through_day: 100000
+    daily_per_mailbox: 16
+    hourly_per_mailbox: 4
+    jitter_min_seconds: 480
+    jitter_max_seconds: 1080
+
+mailboxes:
+  - email: p.patil@pratz.is-a.dev
+    display_name: Prathamesh Patil
+    password_env: ZOHO_APP_PASSWORD_PRATZ_P_PATIL
+  - email: prathamesh.p@pratz.is-a.dev
+    display_name: Prathamesh Patil
+    password_env: ZOHO_APP_PASSWORD_PRATZ_PRATHAMESH_P
+  - email: prathamesh@prathameshpatil.is-a.dev
+    display_name: Prathamesh Patil
+    password_env: ZOHO_APP_PASSWORD_PP_PRATHAMESH
+  - email: patil@prathameshpatil.is-a.dev
+    display_name: Prathamesh Patil
+    password_env: ZOHO_APP_PASSWORD_PP_PATIL
+  - email: prathamesh.patil@prathameshpatil.is-a.dev
+    display_name: Prathamesh Patil
+    password_env: ZOHO_APP_PASSWORD_PP_PRATHAMESH_PATIL
+  - email: connect@prathameshpatil.is-a.dev
+    display_name: Prathamesh Patil
+    password_env: ZOHO_APP_PASSWORD_PP_CONNECT
+  - email: p.patil@prathameshpatil.is-a.dev
+    display_name: Prathamesh Patil
+    password_env: ZOHO_APP_PASSWORD_PP_P_PATIL
